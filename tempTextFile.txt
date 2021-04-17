@@ -1,0 +1,12 @@
+Pratapnagar Post Office1,Pratap Nagar1,390001
+Pratapnagar Post Office2,Pratap Nagar2,390002
+Pratapnagar Post Office3,Pratap Nagar3,390003
+Pratapnagar Post Office4,Pratap Nagar4,390004
+Pratapnagar Post Office5,Pratap Nagar5,390005
+Pratapnagar Post Office6,Pratap Nagar6,390006
+Pratapnagar Post Office7,Pratap Nagar7,390007
+Pratapnagar Post Office8,Pratap Nagar8,390008
+Pratapnagar Post Office9,Pratap Nagar9,390009
+Pratapnagar Post Office90,Pratap Nagar9,390009
+Test Name1,Test Area1,390098
+Test Name2,Test Area2,390099
