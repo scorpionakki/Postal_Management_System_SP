@@ -19,6 +19,8 @@ int fd[100][2]; //pipes
 int totalPOs = -1; //total POs added. This will keep a count
 int childIDS_PINCODE[100][2];
 int childIDS_PINCODE_ctr = 0;
+int letterPIPEcheck[100]; // For checking on which pipe the letter is going
+int letterPIPEcheck_ctr = 0;
 
 struct PO
 {
@@ -105,11 +107,11 @@ void addNewPO()
 
 			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = getpid();
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
-
-			close(fd[totalPOs][WRITE]);
-			read(fd[totalPOs][READ], letter, 100);
-			printf("Letter information passed to Child : %s\n",letter);
-			exit(0);
+			childIDS_PINCODE_ctr++;
+			// close(fd[totalPOs][WRITE]);
+			// read(fd[totalPOs][READ], letter, 100);
+			// printf("Letter information passed to Child : %s\n",letter);
+			while(1);
 		}
 	}
 	
@@ -144,13 +146,23 @@ void sigusr_handler(int signum)
 				printf("Please enter from-pincode: ");
 				scanf("%d",&from);
 
+				printf("%s %d %d %d\n",name,to,from,childIDS_PINCODE_ctr);
 				for(int i=0;i<childIDS_PINCODE_ctr;i++)
 				{
+					printf("Inside for LOOP\n");
+					printf("%d %d\n",childIDS_PINCODE[i][0], childIDS_PINCODE[i][1]);
 					if(childIDS_PINCODE[i][1] == to)
 					{
+						close(fd[i][READ]);
 						write(fd[i][WRITE], name, 100);
+						letterPIPEcheck[letterPIPEcheck_ctr++] = i;
+						printf("Letter Data: %s\n",name);
 						kill(childIDS_PINCODE[i][0], SIGUSR2);
 						break;
+					}
+					else
+					{
+						printf("Condition Checking\n");
 					}
 				}
 			}
@@ -159,7 +171,9 @@ void sigusr_handler(int signum)
 		case SIGUSR2:
 			if(getpid() != parentPID)
 			{
-				read()
+				char buffer[100];
+				read(letterPIPEcheck[letterPIPEcheck_ctr], buffer, 100);
+				printf("Content read : %s\n", buffer);
 			}
 	}
 		
@@ -221,15 +235,28 @@ int main()
 
 	for (int i = 0; i < totalPOs; i++)
 	{
-		if (fork() == 0)
+		childPID = fork();
+		if (childPID == 0)
 		{
 			childPO = pos[i];
 
 			printf("Name : %s || Area : %s || Area Code : %d\n", childPO.name, childPO.area, childPO.areaCode);
+
+			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = getpid();
+			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
+			printf("CHILDIDS_PINCODE_CTR : %d\n",childIDS_PINCODE_ctr);
 			// close(fd[i][READ]);
 			// read(fd[i][READ], structPassedToChild, 100);
 			// printf("Struct information passed to Child : %s\n",structPassedToChild);
-			exit(0);
+			while(1);
+		}
+		else
+		{
+			
+			childPO = pos[i];
+			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = childPID;
+			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
+			childIDS_PINCODE_ctr++;
 		}
 	}
 
