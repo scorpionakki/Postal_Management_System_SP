@@ -12,17 +12,21 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
+#include <pthread.h>
 
 #define READ 0	/* The index of the “read” end of the pipe */
 #define WRITE 1 /* The index of the “write” end of the pipe */
 
 int parentPID, childPID; //For determining parent or child
-int fd[100][2]; //pipes
-int totalPOs = -1; //total POs added. This will keep a count
-int childIDS_PINCODE[100][2];
-int childIDS_PINCODE_ctr = 0;
-int letterPIPEcheck[100]; // For checking on which pipe the letter is going
-int letterPIPEcheck_ctr = 0;
+int fd[100][2];			 //pipes
+int totalPOs = -1;		 //total POs added. This will keep a count
+static int childIDS_PINCODE[100][2];
+static int childIDS_PINCODE_ctr = 0;
+static int letterPIPEcheck[100]; // For checking on which pipe the letter is going
+static int letterPIPEcheck_ctr = 0;
+int templetterPIPEcheck_ctr = 0; //Doing this because in letterPIPEcheck[letterPIPEcheck_ctr++] = i; It will add data and then letterPIPEcheck_ctr will go +1 i.e. to an empty space in array
+
+pthread_t threadID;
 
 struct PO
 {
@@ -45,16 +49,30 @@ void clean_stdin(void)
 }
 
 //For Calculating the size of string(actual not the max)
-int totalSizeString(const char* str)
+int totalSizeString(const char *str)
 {
-	char* c = &str[0];
+	char *c = &str[0];
 	int size = 0;
-	while(*c != '\0')
+	while (*c != '\0')
 	{
 		c++;
 		size++;
 	}
 	return size;
+}
+
+//For Thread Implementation
+void *thread_test_for_eachLetterReceived(void *p_id)
+{
+	int *p_idLocal = p_id;
+	if (getpid() == *p_idLocal)
+	{
+		printf("THREAD TEST: OH HELLO THERE\n");
+	}
+	else
+	{
+		printf("THREAD TEST: STILL NOPE :%d\n", getpid());
+	}
 }
 
 //For Input 1 - Add a new PO
@@ -79,17 +97,17 @@ void addNewPO()
 	printf("Please provide the Post Office AreaCode : ");
 	scanf("%d", &tempNew->areaCode);
 	printf("%d\n", tempNew->areaCode);
-	
+
 	strcpy(tempArr, tempNew->name);
 	tempSize = totalSizeString(tempArr);
 	tempSize--;
-	tempArr[tempSize]=',';
+	tempArr[tempSize] = ',';
 
 	strcat(tempArr, tempNew->area);
 	tempSize = totalSizeString(tempArr);
 	tempSize--;
-	tempArr[tempSize]=',';
-	
+	tempArr[tempSize] = ',';
+
 	sprintf(tempAreaCode, "%d", tempNew->areaCode);
 	strcat(tempArr, tempAreaCode);
 
@@ -98,11 +116,11 @@ void addNewPO()
 
 	pos[totalPOs] = *tempNew;
 
-	if(getpid() == parentPID)
+	if (getpid() == parentPID)
 	{
 		if (fork() == 0)
 		{
-			
+
 			childPO = pos[totalPOs];
 
 			printf("Name : %s || Area : %s || Area Code : %d\n", childPO.name, childPO.area, childPO.areaCode);
@@ -113,10 +131,11 @@ void addNewPO()
 			// close(fd[totalPOs][WRITE]);
 			// read(fd[totalPOs][READ], letter, 100);
 			// printf("Letter information passed to Child : %s\n",letter);
-			while(1);
+			while (1)
+				;
 		}
 	}
-	
+
 	totalPOs++;
 
 	printf("The PO is added\n");
@@ -132,68 +151,84 @@ void newHandlerSigCHILD()
 
 void sigusr_handler(int signum)
 {
-	switch(signum)
+	switch (signum)
 	{
-		case SIGUSR1:
-			if(getpid() == parentPID) //Parent Block
+	case SIGUSR1:
+		if (getpid() == parentPID) //Parent Block
+		{
+			int to, from;
+			char name[100];
+			printf("Please provide your name: ");
+			scanf("%s", name);
+
+			printf("Please enter to-pincode: ");
+			scanf("%d", &to);
+
+			printf("Please enter from-pincode: ");
+			scanf("%d", &from);
+
+			printf("%s %d %d %d\n", name, to, from, childIDS_PINCODE_ctr);
+			for (int i = 0; i < childIDS_PINCODE_ctr; i++)
 			{
-				int to,from;
-				char name[100];
-				printf("Please provide your name: ");
-				scanf("%s",name);
-
-				printf("Please enter to-pincode: ");
-				scanf("%d",&to);
-
-				printf("Please enter from-pincode: ");
-				scanf("%d",&from);
-
-				printf("%s %d %d %d\n",name,to,from,childIDS_PINCODE_ctr);
-				for(int i=0;i<childIDS_PINCODE_ctr;i++)
+				printf("%d %d\n", childIDS_PINCODE[i][0], childIDS_PINCODE[i][1]);
+				if (childIDS_PINCODE[i][1] == to)
 				{
-					printf("Inside for LOOP\n");
-					printf("%d %d\n",childIDS_PINCODE[i][0], childIDS_PINCODE[i][1]);
-					if(childIDS_PINCODE[i][1] == to)
-					{
-						close(fd[i][READ]);
-						write(fd[i][WRITE], name, 100);
-						letterPIPEcheck[letterPIPEcheck_ctr++] = i;
-						printf("Letter Data: %s\n",name);
-						kill(childIDS_PINCODE[i][0], SIGUSR2);
-						break;
-					}
-					else
-					{
-						printf("Condition Checking\n");
-					}
+					close(fd[i][READ]);
+					write(fd[i][WRITE], name, 100);
+					letterPIPEcheck[letterPIPEcheck_ctr] = i;
+					printf("%d\n", letterPIPEcheck[letterPIPEcheck_ctr]);
+					letterPIPEcheck_ctr++;
+					printf("LetterPIPEcheck_ctr : %d\n", letterPIPEcheck_ctr);
+					printf("Letter Data: %s\n", name);
+
+					//START: Testing Thread Implementation for each letter received
+					// int process_id = childIDS_PINCODE[i][0];
+					// int err = pthread_create (&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&process_id);
+					// if (err != 0)
+					// 		printf("cant create thread: %s\n", strerror(err));
+					//END: Testing
+					kill(childIDS_PINCODE[i][0], SIGUSR2);
+					break;
 				}
 			}
-			break;
-		
-		case SIGUSR2:
-			if(getpid() != parentPID)
+		}
+		break;
+
+	case SIGUSR2:
+		if (getpid() != parentPID)
+		{
+			for (int i = 0; i <= childIDS_PINCODE_ctr; i++)
 			{
-				char buffer[100];
-				read(letterPIPEcheck[letterPIPEcheck_ctr], buffer, 100);
-				printf("Content read : %s\n", buffer);
+				if (getpid() == childIDS_PINCODE[i][0])
+				{
+					char buffer[100];
+					printf("BEFORE READING FROM PIPE\n");
+					read(fd[i][READ], buffer, 100);
+					printf("Content read : %s\n", buffer);
+				}
 			}
+		}
+		else
+		{
+			printf("WRONG ID BRO!\n");
+		}
+		break;
 	}
-		
 }
 
 int main()
 {
-	
+
 	char structPassedToChild[100];
 	oldHandlerSigCHILD = signal(SIGCHLD, newHandlerSigCHILD);
-	
-	if (signal(SIGUSR1, sigusr_handler) == SIG_ERR)	// both parent and child register for SIGUSR1 handler
+
+	if (signal(SIGUSR1, sigusr_handler) == SIG_ERR) // both parent and child register for SIGUSR1 handler
 	{
 		printf("Unable to crete handler for SIGUSR1\n");
 		exit(-1);
 	}
 
-	if (signal(SIGUSR2, sigusr_handler) == SIG_ERR)	// both parent and child register for SIGUSR2 handler
+	if (signal(SIGUSR2, sigusr_handler) == SIG_ERR) // both parent and child register for SIGUSR2 handler
 	{
 		printf("Unable to crete handler for SIGUSR2\n");
 		exit(-1);
@@ -246,15 +281,16 @@ int main()
 
 			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = getpid();
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
-			printf("CHILDIDS_PINCODE_CTR : %d\n",childIDS_PINCODE_ctr);
+			printf("CHILDIDS_PINCODE_CTR : %d\n", childIDS_PINCODE_ctr);
 			// close(fd[i][READ]);
 			// read(fd[i][READ], structPassedToChild, 100);
 			// printf("Struct information passed to Child : %s\n",structPassedToChild);
-			while(1);
+			while (1)
+				;
 		}
 		else
 		{
-			
+
 			childPO = pos[i];
 			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = childPID;
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
@@ -283,9 +319,9 @@ int main()
 			{
 				addNewPO();
 			}
-			else if(input == 2)
+			else if (input == 2)
 			{
-				kill(parentPID,SIGUSR1);
+				kill(parentPID, SIGUSR1);
 			}
 		}
 	}
