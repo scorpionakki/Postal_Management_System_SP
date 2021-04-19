@@ -1,6 +1,8 @@
 //LOCKS ARE PENDING
 //IDENTIFY PARENT HAS WRITTEN TO WHICH PIPE
 
+//Every letter has a seperate thread and that thread once received by the PO will sleep for 10 seconds and then will be out for delivery
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
