@@ -1,7 +1,4 @@
-//LOCKS ARE PENDING
-//IDENTIFY PARENT HAS WRITTEN TO WHICH PIPE
-
-//Every letter has a seperate thread and that thread once received by the PO will sleep for 10 seconds and then will be out for delivery
+//LOCKS ARE PENDING WHILE WRITING IN THE FILE
 
 #include <stdio.h>
 #include <string.h>
@@ -13,12 +10,14 @@
 #include <sys/wait.h>
 #include <sys/resource.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #define READ 0	/* The index of the “read” end of the pipe */
 #define WRITE 1 /* The index of the “write” end of the pipe */
 
 int parentPID, childPID; //For determining parent or child
-int fd[100][2];			 //pipes
+int fd[100][2];			 //pipes - Parent Write, Child Read (For Letter Data)
+int fd_ack[100][2];		 //pipes - Parent Read, Child Write (For Acknowledgement)
 int totalPOs = -1;		 //total POs added. This will keep a count
 int childIDS_PINCODE[100][2];
 int childIDS_PINCODE_ctr = 0;
@@ -27,6 +26,7 @@ int letterPIPEcheck_ctr = 0;
 int templetterPIPEcheck_ctr = 0; //Doing this because in letterPIPEcheck[letterPIPEcheck_ctr++] = i; It will add data and then letterPIPEcheck_ctr will go +1 i.e. to an empty space in array
 
 pthread_t threadID;
+sem_t semaphore;
 
 struct PO
 {
@@ -40,10 +40,11 @@ struct Letter
 	char nameL[100];
 	int to;
 	int from;
-};
+	char status[50];
+}; //For letter
 
-struct PO childPO;
-struct PO pos[100];
+struct PO childPO;	//Temporary child for containing the data before pushing it to array of pos
+struct PO pos[100]; //Array of post offices
 
 //For cleaing the stdin
 void clean_stdin(void)
@@ -71,61 +72,80 @@ int totalSizeString(char *str)
 //For Thread Implementation
 void *thread_test_for_eachLetterReceived(void *letter)
 {
-	//RECEIVED FILE WRITE
-	struct Letter *letterLocal = letter;
-	char folderFileRec[] = "Letter_Files/";
-	char tempTo[7];
-	char tempFrom[7];
-	sprintf(tempTo, "%d", letterLocal->to);
-	sprintf(tempFrom, "%d", letterLocal->from);
+	// //RECEIVED FILE WRITE
+	// struct Letter *letterLocal = letter;
+	// char folderFileRec[] = "Letter_Files/";
+	// char tempTo[7];
+	// char tempFrom[7];
+	// sprintf(tempTo, "%d", letterLocal->to);
+	// sprintf(tempFrom, "%d", letterLocal->from);
 
-	strcat(folderFileRec, tempTo);
-	strcat(folderFileRec, ".txt");
-	
-	FILE *fPtrRec;
-	fPtrRec = fopen(folderFileRec, "a+");
+	// strcat(folderFileRec, tempTo);
+	// strcat(folderFileRec, ".txt");
 
-	char tempArr[1000] = "RECEIVED: ";
+	// FILE *fPtrRec;
+	// fPtrRec = fopen(folderFileRec, "a+");
 
-	strcat(tempArr, letterLocal->nameL);
-	int tempPos = totalSizeString(tempArr);
-	tempPos--;
-	memmove(&tempArr[tempPos], &tempArr[tempPos + 1], strlen(tempArr) - tempPos);
-	strcat(tempArr, ",");
-	strcat(tempArr, tempTo);
-	strcat(tempArr, ",");
-	strcat(tempArr, tempFrom);
-	
-	fprintf(fPtrRec, "%s\n",tempArr);
-	fclose(fPtrRec);
-	
+	// char tempArr[1000] = "RECEIVED: ";
+
+	// strcat(tempArr, letterLocal->nameL);
+	// int tempPos = totalSizeString(tempArr);
+	// tempPos--;
+	// memmove(&tempArr[tempPos], &tempArr[tempPos + 1], strlen(tempArr) - tempPos);
+	// strcat(tempArr, ",");
+	// strcat(tempArr, tempTo);
+	// strcat(tempArr, ",");
+	// strcat(tempArr, tempFrom);
+
+	// sem_wait(&semaphore);
+	// fprintf(fPtrRec, "%s\n",tempArr);
+	// sem_post(&semaphore);
+	// fclose(fPtrRec);
+
 	//SEND FILE WRITE
+
+
 	struct Letter *letterLocalSend = letter;
+	
+	printf("%s %d %d %s!!\n",letterLocalSend->nameL,letterLocalSend->to,letterLocalSend->from,letterLocalSend->status);
+
 	char folderFileSend[] = "Letter_Files/";
 	char tempToSend[7];
 	char tempFromSend[7];
 	sprintf(tempToSend, "%d", letterLocalSend->to);
 	sprintf(tempFromSend, "%d", letterLocalSend->from);
 
-	strcat(folderFileSend, tempFromSend);
+
+	if (strcmp(letterLocalSend->status, "SENT: ") == 0)
+	{
+		strcat(folderFileSend, tempFromSend);
+	}
+	else if (strcmp(letterLocalSend->status, "RECEIVED: ") == 0)
+	{
+		strcat(folderFileSend, tempToSend);
+	}
 	strcat(folderFileSend, ".txt");
 
 	FILE *fPtr;
 	fPtr = fopen(folderFileSend, "a+");
-	char tempArrSend[1000] = "SENT: ";
+	char tempArrSend[1000];
+	strcpy(tempArrSend, letterLocalSend->status);
 
 	strcat(tempArrSend, letterLocalSend->nameL);
-	int tempPosSend = totalSizeString(tempArrSend);
-	tempPosSend--;
-	memmove(&tempArrSend[tempPosSend], &tempArrSend[tempPosSend + 1], strlen(tempArrSend) - tempPosSend);
+	// int tempPosSend = totalSizeString(tempArrSend);
+	// tempPosSend--;
+	// memmove(&tempArrSend[tempPosSend], &tempArrSend[tempPosSend + 1], strlen(tempArrSend) - tempPosSend);
 	strcat(tempArrSend, ",");
 	strcat(tempArrSend, tempToSend);
 	strcat(tempArrSend, ",");
 	strcat(tempArrSend, tempFromSend);
-	
-	fprintf(fPtr, "%s\n", tempArrSend);
-	fclose(fPtr);
 
+	sem_wait(&semaphore);
+	fprintf(fPtr, "%s\n", tempArrSend);
+	sem_post(&semaphore);
+
+	fclose(fPtr);
+	pthread_exit(0);
 }
 
 //For Input 1 - Add a new PO
@@ -184,7 +204,8 @@ void addNewPO()
 			// close(fd[totalPOs][WRITE]);
 			// read(fd[totalPOs][READ], letter, 100);
 			// printf("Letter information passed to Child : %s\n",letter);
-			while (1);
+			while (1)
+				;
 		}
 	}
 
@@ -208,6 +229,7 @@ void sigusr_handler(int signum)
 	case SIGUSR1:
 		if (getpid() == parentPID) //Parent Block
 		{
+			printf("INTO SIGUSR1 - PARENT\n");
 			int to, from;
 			char name[100];
 			printf("Please provide your name: ");
@@ -219,30 +241,56 @@ void sigusr_handler(int signum)
 			printf("Please enter from-pincode: ");
 			scanf("%d", &from);
 
-			// printf("%s %d %d %d\n", name, to, from, childIDS_PINCODE_ctr);
 			for (int i = 0; i < childIDS_PINCODE_ctr; i++)
 			{
 				// printf("%d %d\n", childIDS_PINCODE[i][0], childIDS_PINCODE[i][1]);
 				if (childIDS_PINCODE[i][1] == to)
 				{
 					close(fd[i][READ]);
-					write(fd[i][WRITE], name, 100);
+					char toSendLetterFull[200];
+					char toSendLetterToPC[7];
+					char toSendLetterFromPC[7];
+
+					strcpy(toSendLetterFull, name);
+					int tempSize = totalSizeString(toSendLetterFull);
+					tempSize--;
+					toSendLetterFull[tempSize] = ',';
+					// strcat(toSendLetterFull, ",");
+
+					sprintf(toSendLetterToPC, "%d", to);
+					strcat(toSendLetterFull, toSendLetterToPC);
+
+					strcat(toSendLetterFull, ",");
+
+					sprintf(toSendLetterFromPC, "%d", from);
+					strcat(toSendLetterFull, toSendLetterFromPC);
+
+					strcat(toSendLetterFull,",");
+
+					strcat(toSendLetterFull, "SENT: ");
+					write(fd[i][WRITE], toSendLetterFull, 100);
+
 					letterPIPEcheck[letterPIPEcheck_ctr] = i;
-					// printf("%d\n", letterPIPEcheck[letterPIPEcheck_ctr]);
+
 					letterPIPEcheck_ctr++;
-					// printf("LetterPIPEcheck_ctr : %d\n", letterPIPEcheck_ctr);
+
 					// printf("Letter Data: %s\n", name);
 
 					//START: Testing Thread Implementation for each letter received
 					static struct Letter letter;
 					strcpy(letter.nameL, name);
-					printf("LETTER.NAME : %s\n",letter.nameL);
+
+					int tempPosSend = totalSizeString(letter.nameL);
+					tempPosSend--;
+					memmove(&letter.nameL[tempPosSend], &letter.nameL[tempPosSend + 1], strlen(letter.nameL) - tempPosSend);
+
+					// printf("LETTER.NAME : %s\n",letter.nameL);
 					letter.from = from;
 					letter.to = to;
-
-					int err = pthread_create (&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&letter);
+					strcpy(letter.status, "SENT: ");
+					int err = pthread_create(&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&letter);
 					if (err != 0)
-							printf("cant create thread: %s\n", strerror(err));
+						printf("cant create thread: %s\n", strerror(err));
 					//END: Testing
 
 					kill(childIDS_PINCODE[i][0], SIGUSR2);
@@ -259,11 +307,53 @@ void sigusr_handler(int signum)
 			{
 				if (getpid() == childIDS_PINCODE[i][0])
 				{
+					static struct Letter letter;
+
 					char buffer[100];
-					// printf("BEFORE READING FROM PIPE\n");
+					close(fd[i][WRITE]);
 					read(fd[i][READ], buffer, 100);
-					printf("PIPE Content read : %s\n", buffer);
+
+					char delim[] = ",";
+					char *ptr = strtok(buffer, delim);
+
+					strcpy(letter.nameL, ptr);
+					ptr = strtok(NULL, delim);
+
+					letter.to = atoi(ptr);
+					ptr = strtok(NULL, delim);
+
+					letter.from = atoi(ptr);
+					ptr = strtok(NULL, delim);
+
+					strcpy(letter.status, "RECEIVED: ");
+					
+					int err = pthread_create(&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&letter);
+					if (err != 0)
+						printf("cant create thread: %s\n", strerror(err));
+					//END: Testing
+
+					close(fd_ack[i][READ]);
+					write(fd_ack[i][WRITE], "Received", 10);
+					printf("WRITTEN THE DATA NOW SENDING SIGNAL : %d\n",i);
+					kill(parentPID, SIGUSR2);
+					break;
 				}
+			}
+		}
+		else
+		{
+			char ack[10];
+			close(fd_ack[letterPIPEcheck[letterPIPEcheck_ctr]][WRITE]);
+			int temp = letterPIPEcheck_ctr - 1;
+			printf("WAITING TO READ : %d\n",letterPIPEcheck[temp]);
+			read(fd_ack[letterPIPEcheck[temp]][READ], ack, 10);
+			if (strcmp(ack, "Received") == 0)
+			{
+				printf("Acknowledgement of letter\n");
+			}
+			else
+			{
+				printf("There is some error\n");
 			}
 		}
 		break;
@@ -272,7 +362,7 @@ void sigusr_handler(int signum)
 
 int main()
 {
-
+	sem_init(&semaphore, 0, 1);
 	char structPassedToChild[100];
 	oldHandlerSigCHILD = signal(SIGCHLD, newHandlerSigCHILD);
 
@@ -302,6 +392,7 @@ int main()
 	{
 		totalPOs++;
 		pipe(fd[totalPOs]);
+		pipe(fd_ack[totalPOs]);
 		char *token;
 		token = strtok(line, ",");
 
@@ -339,7 +430,8 @@ int main()
 			// close(fd[i][READ]);
 			// read(fd[i][READ], structPassedToChild, 100);
 			// printf("Struct information passed to Child : %s\n",structPassedToChild);
-			while (1);
+			while (1)
+				;
 		}
 		else
 		{
@@ -356,9 +448,13 @@ int main()
 		sleep(10);
 		int input;
 
+		for(int i=0;i<totalPOs;i++)
+		{
+			printf("PID : %d Area Code : %d\n",childIDS_PINCODE[i][0],childIDS_PINCODE[i][1]);
+		}
 		while (1)
 		{
-			printf("\e[1;1H\e[2J");
+			// printf("\e[1;1H\e[2J");
 			printf("-------Welcome to Vadodara Postal System---------\n");
 			printf("1. Add a new Post Office\n");
 			printf("2. Deliver a letter\n");
@@ -378,4 +474,5 @@ int main()
 			}
 		}
 	}
+	fclose(fp);
 }
