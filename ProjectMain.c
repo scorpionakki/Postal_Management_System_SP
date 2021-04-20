@@ -20,10 +20,10 @@
 int parentPID, childPID; //For determining parent or child
 int fd[100][2];			 //pipes
 int totalPOs = -1;		 //total POs added. This will keep a count
-static int childIDS_PINCODE[100][2];
-static int childIDS_PINCODE_ctr = 0;
-static int letterPIPEcheck[100]; // For checking on which pipe the letter is going
-static int letterPIPEcheck_ctr = 0;
+int childIDS_PINCODE[100][2];
+int childIDS_PINCODE_ctr = 0;
+int letterPIPEcheck[100]; // For checking on which pipe the letter is going
+int letterPIPEcheck_ctr = 0;
 int templetterPIPEcheck_ctr = 0; //Doing this because in letterPIPEcheck[letterPIPEcheck_ctr++] = i; It will add data and then letterPIPEcheck_ctr will go +1 i.e. to an empty space in array
 
 pthread_t threadID;
@@ -33,6 +33,13 @@ struct PO
 	char name[100];
 	char area[100];
 	int areaCode;
+}; //For post office
+
+struct Letter
+{
+	char nameL[100];
+	int to;
+	int from;
 };
 
 struct PO childPO;
@@ -49,9 +56,9 @@ void clean_stdin(void)
 }
 
 //For Calculating the size of string(actual not the max)
-int totalSizeString(const char *str)
+int totalSizeString(char *str)
 {
-	char *c = &str[0];
+	char *c = str;
 	int size = 0;
 	while (*c != '\0')
 	{
@@ -62,17 +69,63 @@ int totalSizeString(const char *str)
 }
 
 //For Thread Implementation
-void *thread_test_for_eachLetterReceived(void *p_id)
+void *thread_test_for_eachLetterReceived(void *letter)
 {
-	int *p_idLocal = p_id;
-	if (getpid() == *p_idLocal)
-	{
-		printf("THREAD TEST: OH HELLO THERE\n");
-	}
-	else
-	{
-		printf("THREAD TEST: STILL NOPE :%d\n", getpid());
-	}
+	//RECEIVED FILE WRITE
+	struct Letter *letterLocal = letter;
+	char folderFileRec[] = "Letter_Files/";
+	char tempTo[7];
+	char tempFrom[7];
+	sprintf(tempTo, "%d", letterLocal->to);
+	sprintf(tempFrom, "%d", letterLocal->from);
+
+	strcat(folderFileRec, tempTo);
+	strcat(folderFileRec, ".txt");
+	
+	FILE *fPtrRec;
+	fPtrRec = fopen(folderFileRec, "a+");
+
+	char tempArr[1000] = "RECEIVED: ";
+
+	strcat(tempArr, letterLocal->nameL);
+	int tempPos = totalSizeString(tempArr);
+	tempPos--;
+	memmove(&tempArr[tempPos], &tempArr[tempPos + 1], strlen(tempArr) - tempPos);
+	strcat(tempArr, ",");
+	strcat(tempArr, tempTo);
+	strcat(tempArr, ",");
+	strcat(tempArr, tempFrom);
+	
+	fprintf(fPtrRec, "%s\n",tempArr);
+	fclose(fPtrRec);
+	
+	//SEND FILE WRITE
+	struct Letter *letterLocalSend = letter;
+	char folderFileSend[] = "Letter_Files/";
+	char tempToSend[7];
+	char tempFromSend[7];
+	sprintf(tempToSend, "%d", letterLocalSend->to);
+	sprintf(tempFromSend, "%d", letterLocalSend->from);
+
+	strcat(folderFileSend, tempFromSend);
+	strcat(folderFileSend, ".txt");
+
+	FILE *fPtr;
+	fPtr = fopen(folderFileSend, "a+");
+	char tempArrSend[1000] = "SENT: ";
+
+	strcat(tempArrSend, letterLocalSend->nameL);
+	int tempPosSend = totalSizeString(tempArrSend);
+	tempPosSend--;
+	memmove(&tempArrSend[tempPosSend], &tempArrSend[tempPosSend + 1], strlen(tempArrSend) - tempPosSend);
+	strcat(tempArrSend, ",");
+	strcat(tempArrSend, tempToSend);
+	strcat(tempArrSend, ",");
+	strcat(tempArrSend, tempFromSend);
+	
+	fprintf(fPtr, "%s\n", tempArrSend);
+	fclose(fPtr);
+
 }
 
 //For Input 1 - Add a new PO
@@ -123,7 +176,7 @@ void addNewPO()
 
 			childPO = pos[totalPOs];
 
-			printf("Name : %s || Area : %s || Area Code : %d\n", childPO.name, childPO.area, childPO.areaCode);
+			// printf("Name : %s || Area : %s || Area Code : %d\n", childPO.name, childPO.area, childPO.areaCode);
 
 			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = getpid();
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
@@ -131,8 +184,7 @@ void addNewPO()
 			// close(fd[totalPOs][WRITE]);
 			// read(fd[totalPOs][READ], letter, 100);
 			// printf("Letter information passed to Child : %s\n",letter);
-			while (1)
-				;
+			while (1);
 		}
 	}
 
@@ -159,7 +211,7 @@ void sigusr_handler(int signum)
 			int to, from;
 			char name[100];
 			printf("Please provide your name: ");
-			scanf("%s", name);
+			fgets(name, 100, stdin);
 
 			printf("Please enter to-pincode: ");
 			scanf("%d", &to);
@@ -167,26 +219,32 @@ void sigusr_handler(int signum)
 			printf("Please enter from-pincode: ");
 			scanf("%d", &from);
 
-			printf("%s %d %d %d\n", name, to, from, childIDS_PINCODE_ctr);
+			// printf("%s %d %d %d\n", name, to, from, childIDS_PINCODE_ctr);
 			for (int i = 0; i < childIDS_PINCODE_ctr; i++)
 			{
-				printf("%d %d\n", childIDS_PINCODE[i][0], childIDS_PINCODE[i][1]);
+				// printf("%d %d\n", childIDS_PINCODE[i][0], childIDS_PINCODE[i][1]);
 				if (childIDS_PINCODE[i][1] == to)
 				{
 					close(fd[i][READ]);
 					write(fd[i][WRITE], name, 100);
 					letterPIPEcheck[letterPIPEcheck_ctr] = i;
-					printf("%d\n", letterPIPEcheck[letterPIPEcheck_ctr]);
+					// printf("%d\n", letterPIPEcheck[letterPIPEcheck_ctr]);
 					letterPIPEcheck_ctr++;
-					printf("LetterPIPEcheck_ctr : %d\n", letterPIPEcheck_ctr);
-					printf("Letter Data: %s\n", name);
+					// printf("LetterPIPEcheck_ctr : %d\n", letterPIPEcheck_ctr);
+					// printf("Letter Data: %s\n", name);
 
 					//START: Testing Thread Implementation for each letter received
-					// int process_id = childIDS_PINCODE[i][0];
-					// int err = pthread_create (&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&process_id);
-					// if (err != 0)
-					// 		printf("cant create thread: %s\n", strerror(err));
+					static struct Letter letter;
+					strcpy(letter.nameL, name);
+					printf("LETTER.NAME : %s\n",letter.nameL);
+					letter.from = from;
+					letter.to = to;
+
+					int err = pthread_create (&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&letter);
+					if (err != 0)
+							printf("cant create thread: %s\n", strerror(err));
 					//END: Testing
+
 					kill(childIDS_PINCODE[i][0], SIGUSR2);
 					break;
 				}
@@ -202,15 +260,11 @@ void sigusr_handler(int signum)
 				if (getpid() == childIDS_PINCODE[i][0])
 				{
 					char buffer[100];
-					printf("BEFORE READING FROM PIPE\n");
+					// printf("BEFORE READING FROM PIPE\n");
 					read(fd[i][READ], buffer, 100);
-					printf("Content read : %s\n", buffer);
+					printf("PIPE Content read : %s\n", buffer);
 				}
 			}
-		}
-		else
-		{
-			printf("WRONG ID BRO!\n");
 		}
 		break;
 	}
@@ -241,7 +295,7 @@ int main()
 		return -1;
 	}
 	parentPID = getpid();
-	printf("Parent : %d\n", parentPID);
+	// printf("Parent : %d\n", parentPID);
 	char line[200];
 
 	while (fgets(line, sizeof(line), fp))
@@ -253,22 +307,22 @@ int main()
 
 		struct PO childPO;
 		strcpy(childPO.name, token);
-		printf("Name : %s\n", childPO.name);
+		// printf("Name : %s\n", childPO.name);
 
 		token = strtok(NULL, ",");
 		strcpy(childPO.area, token);
-		printf("Area : %s\n", childPO.area);
+		// printf("Area : %s\n", childPO.area);
 
 		token = strtok(NULL, ",");
 		childPO.areaCode = atoi(token);
-		printf("Area Code : %d\n", childPO.areaCode);
+		// printf("Area Code : %d\n", childPO.areaCode);
 
 		pos[totalPOs] = childPO;
 
-		printf("\n");
+		// printf("\n");
 	}
 
-	printf("Total POs %d\n", totalPOs);
+	// printf("Total POs %d\n", totalPOs);
 
 	for (int i = 0; i < totalPOs; i++)
 	{
@@ -277,20 +331,18 @@ int main()
 		{
 			childPO = pos[i];
 
-			printf("Name : %s || Area : %s || Area Code : %d\n", childPO.name, childPO.area, childPO.areaCode);
+			// printf("Name : %s || Area : %s || Area Code : %d\n", childPO.name, childPO.area, childPO.areaCode);
 
 			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = getpid();
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
-			printf("CHILDIDS_PINCODE_CTR : %d\n", childIDS_PINCODE_ctr);
+			// printf("CHILDIDS_PINCODE_CTR : %d\n", childIDS_PINCODE_ctr);
 			// close(fd[i][READ]);
 			// read(fd[i][READ], structPassedToChild, 100);
 			// printf("Struct information passed to Child : %s\n",structPassedToChild);
-			while (1)
-				;
+			while (1);
 		}
 		else
 		{
-
 			childPO = pos[i];
 			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = childPID;
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
@@ -300,12 +352,13 @@ int main()
 
 	if (getpid() == parentPID)
 	{
-		printf("Parent's PID : %d & Current PID : %d\n", parentPID, getpid());
+		// printf("Parent's PID : %d & Current PID : %d\n", parentPID, getpid());
 		sleep(10);
 		int input;
 
 		while (1)
 		{
+			printf("\e[1;1H\e[2J");
 			printf("-------Welcome to Vadodara Postal System---------\n");
 			printf("1. Add a new Post Office\n");
 			printf("2. Deliver a letter\n");
