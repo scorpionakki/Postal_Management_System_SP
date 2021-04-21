@@ -104,10 +104,14 @@ void addNewPO()
 	write(copy_desc, tempArr, totalSizeString(tempArr));
 
 	pos[totalPOs] = *tempNew;
-	
+
+	pipe(fd[totalPOs]);
+	pipe(fd_ack[totalPOs]);
+
 	if (getpid() == parentPID)
 	{
-		if (fork() == 0)
+        int childPIDTemp = fork();
+		if (childPIDTemp == 0)
 		{
 
 			childPO = pos[totalPOs];
@@ -120,15 +124,16 @@ void addNewPO()
 		}
 		else
 		{
-			pipe(fd[totalPOs]);
-			pipe(fd_ack[totalPOs]);
+            sleep(2);
 			childPO = pos[totalPOs];
-			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = childPID;
+			childIDS_PINCODE[childIDS_PINCODE_ctr][0] = childPIDTemp;
 			childIDS_PINCODE[childIDS_PINCODE_ctr][1] = childPO.areaCode;
 			childIDS_PINCODE_ctr++;
 			totalPOs++;
+
 		}
 	}
+    
 	printf("The PO is added\n");
 }
 
@@ -183,28 +188,27 @@ void sigusr_handler(int signum)
 					strcat(toSendLetterFull, ",");
 
 					strcat(toSendLetterFull, "SENT: ");
-					write(fd[i][WRITE], toSendLetterFull, 100);
+					write(fd[i][WRITE], toSendLetterFull, 200);
 
 					letterPIPEcheck[letterPIPEcheck_ctr] = i;
 
 					letterPIPEcheck_ctr++;
-
 					//START: Thread Implementation for each letter received
 					static struct Letter letter;
 					strcpy(letter.nameL, name);
-
+                    
 					int tempPosSend = totalSizeString(letter.nameL);
 					tempPosSend--;
 					memmove(&letter.nameL[tempPosSend], &letter.nameL[tempPosSend + 1], strlen(letter.nameL) - tempPosSend);
-
+                    
 					letter.from = from;
 					letter.to = to;
 					strcpy(letter.status, "SENT: ");
+                   
 					int err = pthread_create(&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&letter);
 					if (err != 0)
 						printf("cant create thread: %s\n", strerror(err));
 					//END: Thread Implementation for each letter received
-
 					kill(childIDS_PINCODE[i][0], SIGUSR2);
 					break;
 				}
@@ -219,12 +223,12 @@ void sigusr_handler(int signum)
 			{
 				if (getpid() == childIDS_PINCODE[i][0])
 				{
+                    
 					static struct Letter letter;
 
-					char buffer[100];
+					char buffer[200];
 					close(fd[i][WRITE]);
-					read(fd[i][READ], buffer, 100);
-
+					read(fd[i][READ], buffer, 200);
 					char delim[] = ",";
 					char *ptr = strtok(buffer, delim);
 
@@ -238,7 +242,7 @@ void sigusr_handler(int signum)
 					ptr = strtok(NULL, delim);
 
 					strcpy(letter.status, "RECEIVED: ");
-
+                    
 					int err = pthread_create(&threadID, NULL, thread_test_for_eachLetterReceived, (void *)&letter);
 					if (err != 0)
 						printf("cant create thread: %s\n", strerror(err));
