@@ -162,8 +162,34 @@ void sigusr_handler(int signum)
 
 			printf("Please enter from-pincode: ");
 			scanf("%d", &from);
-
-			for (int i = 0; i < childIDS_PINCODE_ctr; i++)
+			
+			if(to == from)
+			{
+				printf("Invalid details\n");
+				return;
+			}
+			
+			int toFlag=0,fromFlag=0;
+			for(int i=0;i<totalPOs;i++)
+			{
+				if(pos[i].areaCode == to)
+				{
+					toFlag = 1;
+				}
+				if(pos[i].areaCode == from)
+				{
+					fromFlag = 1;
+				}
+			}
+			
+			if(toFlag == 0 || fromFlag == 0)
+			{
+				printf("Invalid details\n");
+				return;
+			}
+			
+			int i = 0;
+			for (i; i < childIDS_PINCODE_ctr; i++)
 			{
 				if (childIDS_PINCODE[i][1] == to)
 				{
@@ -213,6 +239,7 @@ void sigusr_handler(int signum)
 					break;
 				}
 			}
+			
 		}
 		break;
 
@@ -279,6 +306,26 @@ void lettersDelivered()
 	printf("Please provide the area code : ");
 	scanf("%d", &inputAreaCode);
 	clean_stdin();
+	
+	int i=0;
+	for(i;i<totalPOs;i++)
+	{
+		if(pos[i].areaCode == inputAreaCode)
+		{
+			printf("--------------------DETAILS--------------------------\n");
+			printf("Area Name: %s\n", pos[i].name);
+			printf("Area: %s\n",pos[i].area);
+			printf("Area Code: %d\n",pos[i].areaCode);
+			printf("-----------------------------------------------------\n");
+			break;
+		}
+	}
+	
+	if(i==totalPOs)
+	{
+		printf("Wrong PINCODE\n");
+		return;
+	}
 
 	char fullfileName[50]="./Letter_Files/";
 	char fileName[11];
@@ -290,7 +337,7 @@ void lettersDelivered()
 	FILE *fileDataRead = fopen(fullfileName, "r");
 	if (fileDataRead == NULL)
 	{
-		printf("Unable to open/read the file. Please try again\n");
+		printf("No letters for this PINCODE\n");
 		return;
 	}
 

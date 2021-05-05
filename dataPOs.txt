@@ -7,3 +7,4 @@ Pratapnagar Post Office6,Pratap Nagar6,390006
 Pratapnagar Post Office7,Pratap Nagar7,390007
 Pratapnagar Post Office8,Pratap Nagar8,390008
 Pratapnagar Post Office9,Pratap Nagar9,390009
+Pratapnagar Post Office10,Pratap Nagar10,390010
